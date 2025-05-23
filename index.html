@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+ 
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Serial Communication</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+</head>
+ 
+<body>
+    <div id="app" class="container mt-3">
+        <h1 class="text-center">Serial Port Communication</h1>
+        <div class="text-center">
+            <p>
+                Status: <span :class="deviceStatus === 'Open' ? 'text-success' : 'text-danger'">{{ deviceStatus
+                    }}</span>
+            </p>
+            <p v-if="connectedDeviceName">
+                Connected Device: <span class="text-primary">{{ connectedDeviceName }}</span>
+            </p>
+        </div>
+        <!-- <div class="row justify-content-center mb-4"> -->
+            <!-- <div class="col-auto">
+                <button class="btn" :class="deviceStatus === 'Open' ? 'btn-danger' : 'btn-primary'" @click="togglePort">
+                    {{ deviceStatus === 'Open' ? 'Close' : 'Open' }}
+                </button>
+            </div> -->
+            <!-- <div class="col-auto">
+                <button class="btn" :class="insInventory ? 'btn-warning' : 'btn-success'" @click="toggleInventory"
+                    :disabled="deviceStatus != 'Open'">
+                    {{ insInventory ? 'Stop' : 'Start' }}
+                </button>
+            </div> -->
+        <!-- </div> -->
+        <div>
+            <h4>Received Tags:</h4>
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>No.</th>
+                        <th>Tag (Hex)</th>
+                        <th>Count</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr v-for="(tag, index) in tags" :key="index">
+                        <td>{{ index + 1 }}</td>
+                        <td>{{ tagHex(tag.data) }}</td>
+                        <td>{{ tag.count }}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+ 
+ 
+    <script type="module">
+        import { SerialTransport, Reader } from './reader.js';
+ 
+        const app = Vue.createApp({
+            data() {
+                return {
+                    transport: new SerialTransport(),
+                    reader: null,
+                    tags: [], // Store tags with counts
+                    insInventory: false,
+                    deviceStatus: "Closed",
+                    connectedDeviceName: null // Name of the connected device
+                };
+            },
+            methods: {
+                async togglePort() {
+                    if (this.deviceStatus === 'Open') {
+                        // Close the port
+                        try {
+                            await this.transport.close();
+                            this.deviceStatus = 'Closed';
+                            this.connectedDeviceName = null;
+                            this.insInventory = false; // Ensure inventory is stopped
+                        } catch (error) {
+                            console.error("Failed to close port:", error);
+                            alert("Failed to close port.");
+                        }
+                    } else {
+                        // Open the port
+                        try {
+                            await this.transport.open();
+                            this.reader = new Reader(this.transport);
+                            this.deviceStatus = 'Open';
+                            this.connectedDeviceName = this.transport.getDeviceInfo();
+                        } catch (error) {
+                            console.error("Failed to open port:", error);
+                            alert("Failed to open port. Please check the connection.");
+                        }
+                    }
+                },
+                async toggleInventory() {
+                    if (this.insInventory) {
+                        // Stop the inventory process
+                        this.insInventory = false;
+                    } else {
+                        // Start the inventory process
+                        this.tags = []; // Clear tags
+                        this.insInventory = true;
+                        while (this.insInventory) {
+                            try {
+                                const newTags = await this.reader.inventoryAnswerMode();
+                                this.updateTags(newTags); // Update tag counts
+ 
+                                await new Promise(r => setTimeout(r, 100));
+                            } catch (error) {
+                                console.error("Error during inventory:", error);
+                                alert("Error during inventory process.");
+                                this.insInventory = false; // Stop on error
+                            }
+                        }
+                    }
+                },
+                async openPort() {
+                    try {
+                        await this.transport.open();
+                        this.reader = new Reader(this.transport);
+ 
+                        // Update device status and name
+                        this.deviceStatus = "Open";
+                        this.connectedDeviceName = this.transport.getDeviceInfo();
+                    } catch (error) {
+                        console.error("Failed to open port:", error);
+                        alert("Failed to open port. Please check the connection.");
+                    }
+                },
+                async closePort() {
+                    try {
+                        await this.transport.close();
+ 
+                        // Update device status and name
+                        this.deviceStatus = "Closed";
+                        this.connectedDeviceName = null;
+                        this.insInventory = false;
+                    } catch (error) {
+                        console.error("Failed to close port:", error);
+                        alert("Failed to close port.");
+                    }
+                },
+                async start() {
+                    // Clear tags
+                    this.tags = [];
+ 
+                    this.insInventory = true;
+                    while (this.insInventory) {
+                        try {
+                            const newTags = await this.reader.inventoryAnswerMode();
+                            this.updateTags(newTags); // Update tag counts
+ 
+                            await new Promise(r => setTimeout(r, 100));
+                        } catch (error) {
+                            console.error("Error during inventory:", error);
+                            alert("Error during inventory process.");
+                        }
+                    }
+                },
+                stop() {
+                    this.insInventory = false;
+                },
+                tagHex(tag) {
+                    return Array.from(tag)
+                        .map(byte => byte.toString(16).padStart(2, '0').toUpperCase())
+                        .join(' '); // Convert tag to hex string
+                },
+                updateTags(newTags) {
+                    if (!newTags || newTags.length === 0) {
+                        return;
+                    }
+ 
+                    newTags.forEach(tag => {
+                        const existingTag = this.tags.find(t => this.tagHex(t.data) === this.tagHex(tag));
+                        if (existingTag) {
+                            existingTag.count++; // Increment count if tag already exists
+                        } else {
+                            this.tags.push({ data: tag, count: 1 }); // Add new tag with count 1
+                        }
+                    });
+                }
+            },
+            mounted() {
+                this.openPort().then(() => {
+                    if (this.deviceStatus === "Open") {
+                        this.start();
+                    }
+                });
+            }
+        });
+ 
+        app.mount('#app');
+        navigator.serial.addEventListener("connect", () => {
+            console.log("USB connected. Refreshing...");
+            window.location.reload();
+        });
+
+        navigator.serial.addEventListener("disconnect", () => {
+            console.warn("USB disconnected.");
+            window.location.reload();
+        });
+    </script>
+</body>
+ 
+</html>
