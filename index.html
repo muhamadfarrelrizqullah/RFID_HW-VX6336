@@ -21,19 +21,6 @@
                 Connected Device: <span class="text-primary">{{ connectedDeviceName }}</span>
             </p>
         </div>
-        <!-- <div class="row justify-content-center mb-4"> -->
-            <!-- <div class="col-auto">
-                <button class="btn" :class="deviceStatus === 'Open' ? 'btn-danger' : 'btn-primary'" @click="togglePort">
-                    {{ deviceStatus === 'Open' ? 'Close' : 'Open' }}
-                </button>
-            </div> -->
-            <!-- <div class="col-auto">
-                <button class="btn" :class="insInventory ? 'btn-warning' : 'btn-success'" @click="toggleInventory"
-                    :disabled="deviceStatus != 'Open'">
-                    {{ insInventory ? 'Stop' : 'Start' }}
-                </button>
-            </div> -->
-        <!-- </div> -->
         <div>
             <h4>Received Tags:</h4>
             <table class="table table-striped">
@@ -67,7 +54,7 @@
                     tags: [], // Store tags with counts
                     insInventory: false,
                     deviceStatus: "Closed",
-                    connectedDeviceName: null // Name of the connected device
+                    connectedDeviceName: null
                 };
             },
             methods: {
